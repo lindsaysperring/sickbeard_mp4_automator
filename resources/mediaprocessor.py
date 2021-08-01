@@ -143,6 +143,11 @@ class MediaProcessor:
                 self.log.exception(
                     "Unable to generate options, unexpected exception occurred.")
                 return None
+
+            if info.video.codec == "hevc":
+                self.log.error("ERROR! HEVC slipped through the cracks")
+                return None
+
             if self.canBypassConvert(inputfile, info, options):
                 outputfile = inputfile
                 self.log.info(
