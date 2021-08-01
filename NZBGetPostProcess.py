@@ -11,34 +11,34 @@
 ### OPTIONS                                                                ###
 
 # Change to full path to MP4 Automator folder. No quotes and a trailing /
-#MP4_FOLDER=~/sickbeard_mp4_automator/
+# MP4_FOLDER=~/sickbeard_mp4_automator/
 
 # Convert file before passing to destination (True, False)
-#SHOULDCONVERT=False
+# SHOULDCONVERT=False
 
 # Category for Couchpotato
-#CP_CAT=Couchpotato
+# CP_CAT=Couchpotato
 
 # Category for Sonarr
-#SONARR_CAT=Sonarr
+# SONARR_CAT=Sonarr
 
 # Category for Radarr
-#RADARR_CAT=Radarr
+# RADARR_CAT=Radarr
 
 # Category for Sickbeard
-#SICKBEARD_CAT=Sickbeard
+# SICKBEARD_CAT=Sickbeard
 
 # Category for Sickrage
-#SICKRAGE_CAT=Sickrage
+# SICKRAGE_CAT=Sickrage
 
 # Category for bypassing any further processing but still converting
-#BYPASS_CAT=Bypass
+# BYPASS_CAT=Bypass
 
 # Custom output_directory setting
-#OUTPUT_DIR=
+# OUTPUT_DIR=
 
 # Custom path mapping setting
-#PATH_MAPPING=
+# PATH_MAPPING=
 
 ### NZBGET POST-PROCESSING SCRIPT                                          ###
 ##############################################################################
@@ -56,7 +56,7 @@ MP4folder = MP4folder.replace("'", "")
 MP4folder = MP4folder.replace("\\", "/")
 if not(MP4folder.endswith("/")):
     MP4folder += "/"
-#DEBUG#print MP4folder+" the original is "+os.environ['NZBPO_MP4_FOLDER']
+# DEBUG#print MP4folder+" the original is "+os.environ['NZBPO_MP4_FOLDER']
 
 output_dir = None
 if 'NZBPO_OUTPUT_DIR' in os.environ:
@@ -67,7 +67,7 @@ if 'NZBPO_OUTPUT_DIR' in os.environ:
         output_dir = output_dir.replace("\\", "/")
         if not(output_dir.endswith("/")):
             output_dir += "/"
-        #DEBUG#print Overriding output directory
+        # DEBUG#print Overriding output directory
 
 path_mapping = {}
 if 'NZBPO_PATH_MAPPING' in os.environ:
@@ -85,7 +85,8 @@ try:
     from resources.log import getLogger
     from autoprocess import autoProcessMovie, autoProcessTV, autoProcessTVSR, sonarr, radarr
 except ImportError:
-    print("[ERROR] Wrong path to sickbeard_mp4_automator: " + os.environ['NZBPO_MP4_FOLDER'])
+    print("[ERROR] Wrong path to sickbeard_mp4_automator: " +
+          os.environ['NZBPO_MP4_FOLDER'])
     print("[ERROR] %s" % traceback.print_exc())
     sys.exit(1)
 
@@ -93,7 +94,8 @@ except ImportError:
 log = getLogger("NZBGetPostProcess", MP4folder)
 
 # Determine if conversion will take place
-shouldConvert = (os.environ['NZBPO_SHOULDCONVERT'].lower() in ("yes", "true", "t", "1"))
+shouldConvert = (os.environ['NZBPO_SHOULDCONVERT'].lower() in (
+    "yes", "true", "t", "1"))
 
 
 def progressOutput(timecode, debug):
@@ -106,8 +108,9 @@ if 'NZBOP_SCRIPTDIR' in os.environ and not os.environ['NZBOP_VERSION'][0:5] < '1
 
     path = os.environ['NZBPP_DIRECTORY']  # Path to NZB directory
     nzb = os.environ['NZBPP_NZBFILENAME']  # Original NZB name
-    category = os.environ['NZBPP_CATEGORY'].lower().strip()  # NZB Category to determine destination
-    #DEBUG#print "Category is %s." % category
+    # NZB Category to determine destination
+    category = os.environ['NZBPP_CATEGORY'].lower().strip()
+    # DEBUG#print "Category is %s." % category
 
     couchcat = os.environ['NZBPO_CP_CAT'].lower().strip()
     sonarrcat = os.environ['NZBPO_SONARR_CAT'].lower().strip()
@@ -116,7 +119,8 @@ if 'NZBOP_SCRIPTDIR' in os.environ and not os.environ['NZBOP_VERSION'][0:5] < '1
     sickragecat = os.environ['NZBPO_SICKRAGE_CAT'].lower().strip()
     bypass = os.environ['NZBPO_BYPASS_CAT'].lower().strip()
 
-    categories = [sickbeardcat, couchcat, sonarrcat, radarrcat, sickragecat, bypass]
+    categories = [sickbeardcat, couchcat,
+                  sonarrcat, radarrcat, sickragecat, bypass]
 
     log.debug("Path: %s" % path)
     log.debug("NZB: %s" % nzb)
@@ -135,7 +139,8 @@ if 'NZBOP_SCRIPTDIR' in os.environ and not os.environ['NZBOP_VERSION'][0:5] < '1
     status = 0
 
     if os.environ['NZBOP_UNPACK'] != 'yes':
-        log.error("Please enable option \"Unpack\" in nzbget configuration file, exiting.")
+        log.error(
+            "Please enable option \"Unpack\" in nzbget configuration file, exiting.")
         sys.exit(POSTPROCESS_NONE)
 
     # Check par status
@@ -162,26 +167,31 @@ if 'NZBOP_SCRIPTDIR' in os.environ and not os.environ['NZBOP_VERSION'][0:5] < '1
                 fileExtension = os.path.splitext(file)[1]
 
                 if fileExtension in ['.par2']:
-                    log.error("Post-Process: Unpack skipped and par-check skipped (although par2-files exist), setting status \"failed\".")
+                    log.error(
+                        "Post-Process: Unpack skipped and par-check skipped (although par2-files exist), setting status \"failed\".")
                     status = 1
                     break
 
         if os.path.isfile(os.path.join(os.environ['NZBPP_DIRECTORY'], "_brokenlog.txt")) and not status == 1:
-            log.error("Post-Process: _brokenlog.txt exists, download is probably damaged, exiting.")
+            log.error(
+                "Post-Process: _brokenlog.txt exists, download is probably damaged, exiting.")
             status = 1
 
         if not status == 1:
-            log.error("Neither par2-files found, _brokenlog.txt doesn't exist, considering download successful.")
+            log.error(
+                "Neither par2-files found, _brokenlog.txt doesn't exist, considering download successful.")
 
     # Check if destination directory exists (important for reprocessing of history items)
     if not os.path.isdir(os.environ['NZBPP_DIRECTORY']):
-        log.error("Post-Process: Nothing to post-process: destination directory ", os.environ['NZBPP_DIRECTORY'], "doesn't exist.")
+        log.error("Post-Process: Nothing to post-process: destination directory ",
+                  os.environ['NZBPP_DIRECTORY'], "doesn't exist.")
         status = 1
         sys.exit(POSTPROCESS_NONE)
 
     # Make sure one of the appropriate categories is set
     if len([x for x in categories if x.startswith(category)]) < 1:
-        log.error("Post-Process: No valid category detected. Category was %s." % (category))
+        log.error(
+            "Post-Process: No valid category detected. Category was %s." % (category))
         status = 1
         sys.exit(POSTPROCESS_NONE)
 
@@ -202,12 +212,13 @@ if 'NZBOP_SCRIPTDIR' in os.environ and not os.environ['NZBOP_VERSION'][0:5] < '1
         for r, d, f in os.walk(path):
             for files in f:
                 inputfile = os.path.join(r, files)
-                #DEBUG#print inputfile
+                # DEBUG#print inputfile
                 info = mp.isValidSource(inputfile)
                 if info and inputfile not in ignore:
                     log.info("Processing file %s." % inputfile)
                     try:
-                        output = mp.process(inputfile, info=info, reportProgress=True, progressOutput=progressOutput)
+                        output = mp.process(
+                            inputfile, info=info, reportProgress=True, progressOutput=progressOutput)
                         if output and output.get('output'):
                             log.info("Successfully processed %s." % inputfile)
                             ignore.append(output.get('output'))
@@ -215,6 +226,8 @@ if 'NZBOP_SCRIPTDIR' in os.environ and not os.environ['NZBOP_VERSION'][0:5] < '1
                             log.error("Converting file failed %s." % inputfile)
                     except:
                         log.exception("File processing failed.")
+                elif os.path.splitext(inputfile)[-1].lower() == ".avi":
+                    ignore.append(inputfile)
                 else:
                     log.debug("Ignoring file %s." % inputfile)
         if len(ignore) < 1:
@@ -223,33 +236,38 @@ if 'NZBOP_SCRIPTDIR' in os.environ and not os.environ['NZBOP_VERSION'][0:5] < '1
         if settings.output_dir:
             path = settings.output_dir
     if (sickbeardcat.startswith(category)):
-        #DEBUG#print "Sickbeard Processing Activated"
-        autoProcessTV.processEpisode(path, settings, nzb, pathMapping=path_mapping)
+        # DEBUG#print "Sickbeard Processing Activated"
+        autoProcessTV.processEpisode(
+            path, settings, nzb, pathMapping=path_mapping)
         sys.exit(POSTPROCESS_SUCCESS)
     elif (couchcat.startswith(category)):
-        #DEBUG#print "CouchPotato Processing Activated"
-        autoProcessMovie.process(path, settings, nzb, status, pathMapping=path_mapping)
+        # DEBUG#print "CouchPotato Processing Activated"
+        autoProcessMovie.process(
+            path, settings, nzb, status, pathMapping=path_mapping)
         sys.exit(POSTPROCESS_SUCCESS)
     elif (sonarrcat.startswith(category)):
-        #DEBUG#print "Sonarr Processing Activated"
-        success = sonarr.processEpisode(path, settings, True, importMode="Move", pathMapping=path_mapping)
+        # DEBUG#print "Sonarr Processing Activated"
+        success = sonarr.processEpisode(
+            path, settings, True, importMode="Move", pathMapping=path_mapping)
         if success:
             sys.exit(POSTPROCESS_SUCCESS)
         else:
             sys.exit(POSTPROCESS_NONE)
     elif (radarrcat.startswith(category)):
-        #DEBUG#print "Radarr Processing Activated"
-        success = radarr.processMovie(path, settings, True, pathMapping=path_mapping)
+        # DEBUG#print "Radarr Processing Activated"
+        success = radarr.processMovie(
+            path, settings, True, pathMapping=path_mapping)
         if success:
             sys.exit(POSTPROCESS_SUCCESS)
         else:
             sys.exit(POSTPROCESS_NONE)
     elif (sickragecat.startswith(category)):
-        #DEBUG#print "Sickrage Processing Activated"
-        autoProcessTVSR.processEpisode(path, settings, nzb, pathMapping=path_mapping)
+        # DEBUG#print "Sickrage Processing Activated"
+        autoProcessTVSR.processEpisode(
+            path, settings, nzb, pathMapping=path_mapping)
         sys.exit(POSTPROCESS_SUCCESS)
     elif (bypass.startswith(category)):
-        #DEBUG#print "Bypass Further Processing"
+        # DEBUG#print "Bypass Further Processing"
         sys.exit(POSTPROCESS_NONE)
 
 else:

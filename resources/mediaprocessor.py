@@ -1604,6 +1604,9 @@ class MediaProcessor:
             elif self.settings.bypass_copy_all and options and len([x for x in [options['video']] + [x for x in options['audio']] + [x for x in options['subtitle']] if x['codec'] != 'copy']) == 0 and len(options['audio']) == len(info.audio) and len(options['subtitle']) == len(info.subtitle) and not self.settings.force_convert:
                 self.log.info("Input and output extensions match, the file appears to copying all streams, and is not reducing the number of streams, enable force-convert to override [bypass-if-copying-all] [force-convert: %s]." % self.settings.force_convert)
                 return True
+            elif info.video.codec == "mpeg4":
+                self.log.info("Skip processing XviD mpeg4")
+                return True
         self.log.debug("canBypassConvert returned False.")
         return False
 
