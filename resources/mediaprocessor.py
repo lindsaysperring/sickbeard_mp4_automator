@@ -1844,8 +1844,8 @@ class MediaProcessor:
         return False
 
     def canBypassConvert(self, inputfile, info, options=None):
-        if info.video.codec == "mpeg4":
-            self.log.info("Skip processing XviD mpeg4")
+        if info.video.codec == "mpeg4" or info.video.codec == "mpeg2video":
+            self.log.info("Skip processing XviD mpeg")
             return True
         # Process same extensions
         if self.settings.output_extension == self.parseFile(inputfile)[2]:
