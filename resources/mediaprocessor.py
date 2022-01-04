@@ -395,22 +395,27 @@ class MediaProcessor:
                 'x': 0}
 
     # Estimate the video bitrate
-    def estimateVideoBitrate(self, info):
+    def estimateVideoBitrate(self, info, baserate=64000, tolerance=0.95):
+        # attempt to return the detected video bitrate, if applicable
+        min_video_bitrate = (info.video.bitrate / 1000) if info.video and info.video.bitrate else None
+
         try:
             total_bitrate = info.format.bitrate
             audio_bitrate = 0
+            min_audio_bitrate = 0
             for a in info.audio:
-                audio_bitrate += a.bitrate
+                audio_bitrate += a.bitrate if a.bitrate else (baserate * (a.audio_channels or 2))
 
             self.log.debug("Total bitrate is %s." % info.format.bitrate)
             self.log.debug("Total audio bitrate is %s." % audio_bitrate)
-            self.log.debug("Estimated video bitrate is %s." %
-                           (total_bitrate - audio_bitrate))
-            return ((total_bitrate - audio_bitrate) / 1000) * .95
+            audio_bitrate += min_audio_bitrate
+            calculated_bitrate = (total_bitrate - audio_bitrate) / 1000
+            self.log.debug("Estimated video bitrate is %s." % (calculated_bitrate * 1000))
+            return min_video_bitrate if min_video_bitrate and min_video_bitrate < (calculated_bitrate * tolerance) else (calculated_bitrate * tolerance)
         except:
             if info.format.bitrate:
-                return info.format.bitrate / 1000
-        return 0
+                return min_video_bitrate if min_video_bitrate and min_video_bitrate < (info.format.bitrate / 1000) else (info.format.bitrate / 1000)
+        return min_video_bitrate
 
     # Generate a JSON formatter dataset with the input and output information and ffmpeg command for a theoretical conversion
     def jsonDump(self, inputfile, original=None):
@@ -497,9 +502,8 @@ class MediaProcessor:
                 self.log.debug(
                     "Found comment in stream title, setting comment disposition to True.")
                 stream.disposition['comment'] = True
-            if 'hearing' in title:
-                self.log.debug(
-                    "Found hearing in stream title, setting hearing_impaired disposition to True.")
+            if 'hearing' in title or 'sdh' in title:
+                self.log.debug("Found hearing in stream title, setting hearing_impaired disposition to True.")
                 stream.disposition['hearing_impaired'] = True
             if 'visual' in title:
                 self.log.debug(
@@ -509,6 +513,58 @@ class MediaProcessor:
                 self.log.debug(
                     "Found foced in stream title, setting forced disposition to True.")
                 stream.disposition['forced'] = True
+
+    # Get source audio tracks that meet criteria for being the same based on codec combination, language, and dispostion
+    def mapStreamCombinations(self, audiostreams):
+        combinations = []
+        for combo in self.settings.stream_codec_combinations:
+            indexes = self.sublistIndexes([x.codec for x in audiostreams], combo)
+            self.log.debug("Found indexes %s where codec parameters matched combination %s" % (indexes, combo))
+            for index in indexes:
+                stream_sublist = audiostreams[index: index + len(combo)]
+                language_sublist = [x.metadata['language'] for x in stream_sublist]
+                dispo_sublist = [dict(x.disposition) for x in stream_sublist]
+                for x in dispo_sublist:
+                    x['default'] = False
+                same_language = all(x == language_sublist[0] for x in language_sublist)
+                same_dispo = all(x == dispo_sublist[0] for x in dispo_sublist)
+                if same_language and same_dispo:
+                    combinations.append([x.index for x in stream_sublist])
+        self.log.info("The following stream indexes have been identified as being copies: %s [stream-codec-combinations]." % combinations)
+        return combinations
+
+    def purgeDuplicateStreams(self, combinations, options, info):
+        purge = []
+        for combo in combinations:
+            filtered_options = [x for x in options if x['map'] in combo]
+            channels = sorted(list(set([x['channels'] for x in filtered_options])), reverse=True)
+            for c in channels:
+                same_channel_options = [x for x in filtered_options if x['channels'] == c]
+                if len(same_channel_options) > 1:
+                    codecs = [self.getSourceStream(x['map'], info).codec if x['codec'] == 'copy' else x['codec'] for x in same_channel_options]
+                    for codec in set(codecs):
+                        same_codec_options = [x for x in same_channel_options if Converter.codec_name_to_ffprobe_codec_name("audio", x['codec']) == codec or (x['codec'] == 'copy' and self.getSourceStream(x['map'], info).codec == codec)]
+                        if len(same_codec_options) > 1:
+                            same_codec_options.sort(key=lambda x: x['bitrate'], reverse=True)
+                            same_codec_options.sort(key=lambda x: self.getSourceStream(x['map'], info).disposition['default'], reverse=True)
+                            same_codec_options.sort(key=lambda x: x['codec'] == "copy", reverse=True)
+                            purge.extend(same_codec_options[1:])
+        self.log.debug("Purge the following streams: %s." % purge)
+        self.log.info("Found %d streams that can be removed from the output file since they will dupcliates [stream-codec-combinations]." % len(purge))
+        for p in purge:
+            try:
+                options.remove(p)
+            except:
+                self.log.debug("Unable to purge stream, may already have been removed.")
+        return len(purge) > 0
+
+    def sublistIndexes(self, x, y):
+        indexes = []
+        occ = [i for i, a in enumerate(x) if a == y[0]]
+        for b in occ:
+            if x[b:b + len(y)] == y:
+                indexes.append(b)
+        return indexes
 
     # Generate a dict of options to be passed to FFMPEG based on selected settings and the source file parameters and streams
     def generateOptions(self, inputfile, info=None, original=None, tagdata=None):
@@ -560,7 +616,7 @@ class MediaProcessor:
             self.log.exception("Custom video stream copy check error.")
 
         vbitrate_estimate = self.estimateVideoBitrate(info)
-        vbitrate_ratio = self.settings.vbitrateratio.get(info.video.codec, 1.0)
+        vbitrate_ratio = self.settings.vbitrateratio.get(info.video.codec, self.settings.vbitrateratio.get("*", 1.0))
         vbitrate = vbitrate_estimate * vbitrate_ratio
         self.log.debug("Using video bitrate ratio of %f, which results in %f changing to %f." % (
             vbitrate_ratio, vbitrate_estimate, vbitrate))
@@ -717,6 +773,7 @@ class MediaProcessor:
         blocked_audio_languages = []
         blocked_audio_dispositions = []
         ua = (len(self.settings.ua) > 0)
+        acombinations = self.mapStreamCombinations(info.audio)
 
         # Sort incoming streams so that things like first language preferences respect these options
         audio_streams = info.audio
@@ -902,6 +959,7 @@ class MediaProcessor:
                     self.log.debug("Calculated bitrate of %d exceeds maximum bitrate %d, setting to max value [audio-max-bitrate]." % (
                         abitrate, self.settings.amaxbitrate))
                     abitrate = self.settings.amaxbitrate
+                    acodec = self.settings.acodec[0]
 
                 self.log.debug("Audio codec: %s." % acodec)
                 self.log.debug("Channels: %s." % audio_channels)
@@ -967,6 +1025,13 @@ class MediaProcessor:
                     blocked_audio_languages.append(a.metadata['language'])
                     self.log.debug(
                         "Blocking further %s audio streams to prevent multiple streams of the same language [audio-first-stream-of-language]." % a.metadata['language'])
+
+        # Purge Duplicate Streams
+        if self.purgeDuplicateStreams(acombinations, audio_settings, info):
+            try:
+                self.sortStreams(audio_settings, awl)
+            except:
+                self.log.exception("Error sorting output stream options [sort-streams].")
 
         # Set Default Audio Stream
         try:
@@ -1493,23 +1558,29 @@ class MediaProcessor:
                     valid_external_sub = self.isValidSubtitleSource(
                         os.path.join(dirName, fname))
                     if valid_external_sub:
-                        subname, langext = os.path.splitext(subname)
+                        self.log.debug("Potential subtitle candidate identified %s." % (fname))
+                        subname = subname[len(filename + os.path.extsep):]
                         lang = 'und'
-                        while langext:
-                            lang = getAlpha3TCode(langext)
-                            if lang != 'und':
-                                break
-                            subname, langext = os.path.splitext(subname)
+                        for suf in subname.lower().split(os.path.extsep):
+                            self.log.debug("Processing subtitle file suffix %s." % (suf))
+                            l = getAlpha3TCode(suf)
+                            if lang == 'und' and l != 'und':
+                                lang = l
+                                self.log.debug("Found language match %s." % (lang))
+                            if suf in BaseCodec.DISPOSITIONS:
+                                valid_external_sub.subtitle[0].disposition[suf] = True
+                                self.log.debug("Found disposition match %s." % (suf))
+                            # Alternate tags
+                            for k in BaseCodec.ALTERNATES:
+                                if suf in BaseCodec.ALTERNATES[k]:
+                                    valid_external_sub.subtitle[0].disposition[k] = True
+                                    self.log.debug("Found disposition match %s." % (k))
                         if self.settings.sdl and lang == 'und':
                             lang = self.settings.sdl
                         valid_external_sub.subtitle[0].metadata['language'] = lang
 
                         if self.validLanguage(lang, swl):
-                            self.log.debug(
-                                "External %s subtitle file detected %s." % (lang, fname))
-                            for dispo in BaseCodec.DISPOSITIONS:
-                                valid_external_sub.subtitle[0].disposition[dispo] = (
-                                    "." + dispo) in fname
+                            self.log.debug("Valid external %s subtitle file detected %s." % (lang, fname))
                             valid_external_subs.append(valid_external_sub)
                         else:
                             self.log.debug(
@@ -1672,6 +1743,9 @@ class MediaProcessor:
             shutil.move(outputfile, newoutputfile)
             return newoutputfile
         return outputfile
+
+    def getSourceStream(self, index, info):
+        return info.streams[index]
 
     def getSubExtensionFromCodec(self, codec):
         try:

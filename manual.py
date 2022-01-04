@@ -29,6 +29,7 @@ logging.getLogger("subliminal").setLevel(logging.CRITICAL)
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("enzyme").setLevel(logging.WARNING)
 logging.getLogger("qtfaststart").setLevel(logging.CRITICAL)
+logging.getLogger("rebulk").setLevel(logging.WARNING)
 
 log.info("Manual processor started.")
 
@@ -251,7 +252,7 @@ def processFile(inputfile, mp, info=None, relativePath=None, silent=False, tag=T
     if output:
         if not language:
             language = mp.getDefaultAudioLanguage(output["options"]) or None
-            if language:
+            if language and tagdata:
                 tagdata = Metadata(tagdata.mediatype, tmdbid=tagdata.tmdbid, imdbid=tagdata.imdbid, tvdbid=tagdata.tvdbid, season=tagdata.season, episode=tagdata.episode, original=original, language=language, logger=log)
         log.debug("Tag language setting is %s, using language %s for tagging." % (settings.taglanguage or None, language))
         tagfailed = False
@@ -280,6 +281,7 @@ def processFile(inputfile, mp, info=None, relativePath=None, silent=False, tag=T
 
 def walkDir(dir, silent=False, preserveRelative=False, tmdbid=None, imdbid=None, tvdbid=None, tag=True, optionsOnly=False):
     files = []
+    error = []
     mp = MediaProcessor(settings, logger=log)
     for r, d, f in os.walk(dir):
         for file in f:
@@ -296,6 +298,13 @@ def walkDir(dir, silent=False, preserveRelative=False, tmdbid=None, imdbid=None,
                 processFile(filepath, mp, info=info, relativePath=relative, silent=silent, tag=tag, tmdbid=tmdbid, tvdbid=tvdbid, imdbid=imdbid)
             except SkipFileException:
                 log.debug("Skipping file %s." % filepath)
+            except:
+                log.exception("Error processing file %s." % filepath)
+                error.append(filepath)
+    if error:
+        log.error("Script failed to process the following files:")
+        for e in error:
+            log.error(e)
 
 
 def displayOptions(path):
