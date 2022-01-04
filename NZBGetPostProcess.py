@@ -11,31 +11,31 @@
 ### OPTIONS                                                                ###
 
 # Change to full path to MP4 Automator folder. No quotes and a trailing /
-# MP4_FOLDER=~/sickbeard_mp4_automator/
+#MP4_FOLDER=~/sickbeard_mp4_automator/
 
 # Convert file before passing to destination (True, False)
-# SHOULDCONVERT=False
+#SHOULDCONVERT=False
 
 # Category for Sonarr
-# SONARR_CAT=Sonarr
+#SONARR_CAT=Sonarr
 
 # Category for Radarr
-# RADARR_CAT=Radarr
+#RADARR_CAT=Radarr
 
 # Category for Sickbeard
-# SICKBEARD_CAT=Sickbeard
+#SICKBEARD_CAT=Sickbeard
 
 # Category for Sickrage
-# SICKRAGE_CAT=Sickrage
+#SICKRAGE_CAT=Sickrage
 
 # Category for bypassing any further processing but still converting
-# BYPASS_CAT=Bypass
+#BYPASS_CAT=Bypass
 
 # Custom output_directory setting
-# OUTPUT_DIR=
+#OUTPUT_DIR=
 
 # Custom path mapping setting
-# PATH_MAPPING=
+#PATH_MAPPING=
 
 ### NZBGET POST-PROCESSING SCRIPT                                          ###
 ##############################################################################
